@@ -5,18 +5,17 @@ import (
 	"net/http"
 	"time"
 
-	"go.mongodb.org/mongo-driver/mongo"
-
 	"github.com/mrthoabby/portfolio-api/internal/common"
+	"github.com/mrthoabby/portfolio-api/internal/common/contracts"
 	"github.com/mrthoabby/portfolio-api/internal/version"
 )
 
 type Handler struct {
-	db *mongo.Database
+	dataSource contracts.DataSource
 }
 
-func NewHandler(db *mongo.Database) *Handler {
-	return &Handler{db: db}
+func NewHandler(dataSource contracts.DataSource) *Handler {
+	return &Handler{dataSource: dataSource}
 }
 
 // HealthResponse represents the health check response
@@ -32,11 +31,11 @@ func (h *Handler) Check(w http.ResponseWriter, r *http.Request) {
 		Version: version.Get(),
 	}
 
-	// Check database connection
+	// Check data source connection
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	if err := h.db.Client().Ping(ctx, nil); err != nil {
+	if err := h.dataSource.Ping(ctx); err != nil {
 		health.Status = "unhealthy"
 		health.Database = "disconnected"
 		common.RespondJSON(w, http.StatusServiceUnavailable, health)
@@ -46,4 +45,3 @@ func (h *Handler) Check(w http.ResponseWriter, r *http.Request) {
 	health.Database = "connected"
 	common.RespondJSON(w, http.StatusOK, health)
 }
-
