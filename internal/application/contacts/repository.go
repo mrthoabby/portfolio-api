@@ -5,18 +5,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"go.mongodb.org/mongo-driver/mongo"
 
-	"github.com/mrthoabby/portfolio-api/internal/repository"
+	"github.com/mrthoabby/portfolio-api/internal/common/contracts"
 )
 
 type Repository struct {
-	collection *mongo.Collection
+	store contracts.Store
 }
 
-func NewRepository(db *repository.Database) *Repository {
+func NewRepository(dataSource contracts.DataSource) *Repository {
 	return &Repository{
-		collection: db.Database.Collection("contacts"),
+		store: dataSource.Store("contacts"),
 	}
 }
 
@@ -28,10 +27,11 @@ func (r *Repository) Create(ctx context.Context, profileID string, contact *Requ
 		Name:      contact.Name,
 		Email:     contact.Email,
 		Message:   contact.Message,
+		Contacted: false,
 		CreatedAt: now,
 	}
 
-	_, err := r.collection.InsertOne(ctx, newContact)
+	err := r.store.InsertOne(ctx, newContact)
 	if err != nil {
 		return nil, err
 	}

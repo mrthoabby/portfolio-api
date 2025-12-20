@@ -3,38 +3,29 @@ package projects
 import (
 	"context"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-
-	"github.com/mrthoabby/portfolio-api/internal/repository"
+	"github.com/mrthoabby/portfolio-api/internal/common/contracts"
 )
 
 type Repository struct {
-	collection *mongo.Collection
+	store contracts.Store
 }
 
-func NewRepository(db *repository.Database) *Repository {
+func NewRepository(dataSource contracts.DataSource) *Repository {
 	return &Repository{
-		collection: db.Database.Collection("projects"),
+		store: dataSource.Store("projects"),
 	}
 }
 
 func (r *Repository) GetByProfileID(ctx context.Context, profileID string) ([]Project, error) {
-	filter := bson.M{
+	var projects []Project
+	filter := map[string]interface{}{
 		"profileId": profileID,
 		"visible":   true,
 	}
-	opts := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	sortFields := []string{"-createdAt"} // "-" prefix for descending order
 
-	cursor, err := r.collection.Find(ctx, filter, opts)
+	err := r.store.FindMany(ctx, filter, sortFields, &projects)
 	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var projects []Project
-	if err := cursor.All(ctx, &projects); err != nil {
 		return nil, err
 	}
 
