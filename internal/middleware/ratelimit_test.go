@@ -78,29 +78,3 @@ func TestRateLimiter_DifferentIPsHaveSeparateLimits(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
-func TestGetIP_XForwardedFor(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.Header.Set("X-Forwarded-For", "10.0.0.1")
-	req.RemoteAddr = "192.168.1.1:1234"
-
-	ip := getIP(req)
-	assert.Equal(t, "10.0.0.1", ip)
-}
-
-func TestGetIP_XRealIP(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.Header.Set("X-Real-IP", "10.0.0.2")
-	req.RemoteAddr = "192.168.1.1:1234"
-
-	ip := getIP(req)
-	assert.Equal(t, "10.0.0.2", ip)
-}
-
-func TestGetIP_RemoteAddr(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.RemoteAddr = "192.168.1.1:1234"
-
-	ip := getIP(req)
-	assert.Equal(t, "192.168.1.1:1234", ip)
-}
-

@@ -80,24 +80,10 @@ func (instance *RateLimiter) isAllowed(ip string) bool {
 	return true
 }
 
-// getIP extracts the client IP from the request
-func getIP(r *http.Request) string {
-	// Check X-Forwarded-For header (for proxies/load balancers)
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		return xff
-	}
-	// Check X-Real-IP header
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return xri
-	}
-	// Fall back to RemoteAddr
-	return r.RemoteAddr
-}
-
 // Limit returns a middleware that rate limits requests
 func (instance *RateLimiter) Limit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := getIP(r)
+		ip := getClientIP(r)
 
 		if !instance.isAllowed(ip) {
 			w.Header().Set("Retry-After", "60")
