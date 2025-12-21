@@ -1,0 +1,638 @@
+openapi: 3.0.3
+info:
+  title: Portfolio API
+  description: |
+    RESTful API for managing personal portfolio data including profiles, skills, projects, certificates, and contact messages.
+    
+    This API follows a domain-driven design architecture where each domain (profile, skills, projects, certificates, contacts) is self-contained with its own models, repositories, services, and handlers.
+  version: 1.0.0
+  contact:
+    name: Danis Abadía
+    url: https://github.com/mrthoabby
+  license:
+    name: Proprietary
+    url: https://github.com/mrthoabby/portfolio-api
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Profile
+    description: Profile management
+  - name: Skills
+    description: Skills management
+  - name: Projects
+    description: Projects management
+  - name: Certificates
+    description: Certificates management
+  - name: Contact
+    description: Contact form submissions
+  - name: Questions
+    description: Questions and inquiries
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Verifies that the API is running and the database is connected
+      operationId: healthCheck
+      responses:
+        '200':
+          description: API is healthy and database is connected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  database:
+                    type: string
+                    example: connected
+        '503':
+          description: API is unhealthy or database is disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/v1/profiles/{id}:
+    get:
+      tags:
+        - Profile
+      summary: Get profile by ID
+      description: Retrieves the complete profile information for a developer
+      operationId: getProfile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique profile identifier
+          schema:
+            type: string
+            example: "123e4567-e89b-12d3-a456-426614174000"
+      responses:
+        '200':
+          description: Profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '400':
+          description: Bad request - Profile ID is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/profiles/{id}/skills:
+    get:
+      tags:
+        - Skills
+      summary: Get skills by profile ID
+      description: Retrieves all skills associated with a profile, ordered by category and name
+      operationId: getSkills
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique profile identifier
+          schema:
+            type: string
+            example: "123e4567-e89b-12d3-a456-426614174000"
+      responses:
+        '200':
+          description: Skills retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillsResponse'
+        '400':
+          description: Bad request - Profile ID is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/profiles/{id}/projects:
+    get:
+      tags:
+        - Projects
+      summary: Get projects by profile ID
+      description: Retrieves all visible projects associated with a profile, ordered by creation date (newest first). Only projects with visible=true are returned.
+      operationId: getProjects
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique profile identifier
+          schema:
+            type: string
+            example: "123e4567-e89b-12d3-a456-426614174000"
+      responses:
+        '200':
+          description: Projects retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectsResponse'
+        '400':
+          description: Bad request - Profile ID is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/profiles/{id}/certificates:
+    get:
+      tags:
+        - Certificates
+      summary: Get certificates by profile ID
+      description: Retrieves all certificates associated with a profile, ordered by name
+      operationId: getCertificates
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique profile identifier
+          schema:
+            type: string
+            example: "123e4567-e89b-12d3-a456-426614174000"
+      responses:
+        '200':
+          description: Certificates retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificatesResponse'
+        '400':
+          description: Bad request - Profile ID is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/profiles/{id}/contacts:
+    post:
+      tags:
+        - Contact
+      summary: Create contact message
+      description: Creates a new contact message associated with a profile
+      operationId: createContact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique profile identifier
+          schema:
+            type: string
+            example: "123e4567-e89b-12d3-a456-426614174000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactRequest'
+            example:
+              name: "John Doe"
+              email: "john.doe@example.com"
+              message: "Hello, I would like to discuss a project opportunity with you."
+      responses:
+        '201':
+          description: Contact message created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactResponse'
+        '400':
+          description: Bad request - Validation failed or invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/profiles/{id}/questions:
+    post:
+      tags:
+        - Questions
+      summary: Submit a question
+      description: |
+        Submits a new question for a specific profile. The client's IP address is automatically captured and stored with the question.
+        
+        Rate limited to 10 requests per minute per IP address.
+      operationId: createQuestion
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique profile identifier
+          schema:
+            type: string
+            example: "123e4567-e89b-12d3-a456-426614174000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionRequest'
+            example:
+              message: "What technologies do you recommend for building microservices?"
+      responses:
+        '201':
+          description: Question submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionResponse'
+        '400':
+          description: Bad request - Validation failed or invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    Profile:
+      type: object
+      required:
+        - id
+        - name
+        - photoUrl
+        - title
+        - aboutMe
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          description: Unique profile identifier
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        name:
+          type: string
+          description: Full name of the developer
+          example: "Danis Abadía"
+        photoUrl:
+          type: string
+          format: uri
+          description: URL to the profile photo
+          example: "https://example.com/photo.jpg"
+        title:
+          type: string
+          description: Professional title or role
+          example: "Software Engineer"
+        aboutMe:
+          type: string
+          description: Brief description about the developer
+          example: "I'm a Software Engineer with over 4 years of experience..."
+        firstExperienceDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date when the developer started their first professional experience (used to calculate years of experience)
+          example: "2021-11-01T00:00:00Z"
+        createdAt:
+          type: string
+          format: date-time
+          description: Profile creation timestamp
+          example: "2024-01-15T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Profile last update timestamp
+          example: "2024-01-15T10:30:00Z"
+
+    Skill:
+      type: object
+      required:
+        - id
+        - profileId
+        - name
+        - category
+        - proficiency
+      properties:
+        id:
+          type: string
+          description: Unique skill identifier
+          example: "skill-001"
+        profileId:
+          type: string
+          description: ID of the profile this skill belongs to
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        name:
+          type: string
+          description: Name of the skill or technology
+          example: "Go"
+        category:
+          type: string
+          enum: [backend, frontend, tools, softSkills]
+          description: Category of the skill
+          example: "backend"
+        proficiency:
+          type: string
+          enum: [advanced, occasional, past]
+          description: |
+            Proficiency level of the skill:
+            - advanced: Advanced and frequent use
+            - occasional: Occasional use
+            - past: Used in the past, not currently used
+          example: "advanced"
+
+    SkillsResponse:
+      type: object
+      properties:
+        skills:
+          type: array
+          items:
+            $ref: '#/components/schemas/Skill'
+
+    Project:
+      type: object
+      required:
+        - id
+        - profileId
+        - name
+        - description
+        - techStack
+        - visible
+        - createdAt
+      properties:
+        id:
+          type: string
+          description: Unique project identifier
+          example: "project-001"
+        profileId:
+          type: string
+          description: ID of the profile this project belongs to
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        name:
+          type: string
+          description: Name of the project
+          example: "Simulator Platform"
+        description:
+          type: string
+          description: Detailed description of the project
+          example: "Platform to simulate the profitability of an imported product..."
+        techStack:
+          type: array
+          items:
+            type: string
+          description: List of technologies used in the project
+          example: ["Next.js", "TypeScript", ".NET Core With C#", "JavaScript"]
+        githubUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: URL to the GitHub repository (optional)
+          example: "https://github.com/example/simulator-ui"
+        liveUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: URL to the live/demo version of the project (optional)
+          example: "https://example.com"
+        imageDiagramUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: URL to the architecture diagram image (optional)
+          example: "https://example.com/diagram.png"
+        visible:
+          type: boolean
+          description: Whether the project is visible publicly. Only projects with visible=true are returned by the API.
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Project creation timestamp
+          example: "2024-01-15T00:00:00Z"
+
+    ProjectsResponse:
+      type: object
+      properties:
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/Project'
+
+    Certificate:
+      type: object
+      required:
+        - id
+        - profileId
+        - name
+        - issuer
+        - skills
+      properties:
+        id:
+          type: string
+          description: Unique certificate identifier
+          example: "cert-001"
+        profileId:
+          type: string
+          description: ID of the profile this certificate belongs to
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        name:
+          type: string
+          description: Name of the certificate or course
+          example: "Working with Concurrency in Go (Golang)"
+        issuer:
+          type: string
+          description: Organization or platform that issued the certificate
+          example: "Udemy"
+        credentialId:
+          type: string
+          nullable: true
+          description: Unique credential identifier for verification (optional)
+          example: "UC-4c29a89d-0386-42b5-b48b-22845fce3ab2"
+        credentialUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: URL to verify or view the certificate (optional)
+          example: "https://example.com/certificate"
+        skills:
+          type: array
+          items:
+            type: string
+          description: List of skills or technologies covered by this certificate
+          example: ["Go"]
+
+    CertificatesResponse:
+      type: object
+      properties:
+        certificates:
+          type: array
+          items:
+            $ref: '#/components/schemas/Certificate'
+
+    ContactRequest:
+      type: object
+      required:
+        - name
+        - email
+        - message
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+          description: Contact person's full name
+          example: "John Doe"
+        email:
+          type: string
+          format: email
+          description: Contact person's email address (must be a valid email format)
+          example: "john.doe@example.com"
+        message:
+          type: string
+          minLength: 10
+          maxLength: 1000
+          description: Contact message content
+          example: "Hello, I would like to discuss a project opportunity with you."
+
+    ContactResponse:
+      type: object
+      required:
+        - id
+        - message
+        - contactedAt
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the created contact message
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        message:
+          type: string
+          description: Success message
+          example: "Contact message sent successfully"
+        contactedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the contact message was created
+          example: "2024-01-15T12:30:00Z"
+
+    QuestionRequest:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          minLength: 5
+          maxLength: 500
+          description: The question message content
+          example: "What technologies do you recommend for building microservices?"
+
+    QuestionResponse:
+      type: object
+      required:
+        - id
+        - message
+        - createdAt
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the created question
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        message:
+          type: string
+          description: Success message
+          example: "Question received successfully"
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the question was submitted
+          example: "2024-01-15T12:30:00Z"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Error code identifier
+              enum: [BAD_REQUEST, VALIDATION_ERROR, NOT_FOUND, RATE_LIMIT_EXCEEDED, PAYLOAD_TOO_LARGE, INTERNAL_ERROR, SERVICE_UNAVAILABLE]
+              example: "NOT_FOUND"
+            message:
+              type: string
+              description: Human-readable error message
+              example: "Profile not found"
+            details:
+              type: string
+              nullable: true
+              description: Additional error details (e.g., validation errors)
+              example: null
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - database
+      properties:
+        status:
+          type: string
+          enum: [ok, unhealthy]
+          description: Overall API health status
+          example: "unhealthy"
+        database:
+          type: string
+          enum: [connected, disconnected]
+          description: Database connection status
+          example: "disconnected"
+
