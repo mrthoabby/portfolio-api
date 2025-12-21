@@ -4,6 +4,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/mrthoabby/portfolio-api/internal/common"
 )
 
 type responseWriter struct {
@@ -34,7 +36,7 @@ func Logger(next http.Handler) http.Handler {
 			r.URL.Path,
 			wrapped.statusCode,
 			duration,
-			getIP(r),
+			common.ClientIPFromContext(r.Context()),
 		)
 	})
 }
