@@ -2,6 +2,9 @@ package mongo
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"os"
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
@@ -24,13 +27,41 @@ func NewDataSource(connectionString, databaseName string) (*DataSource, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(connectionString))
+	clientOptions := options.Client().ApplyURI(connectionString)
+
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: false,
+	}
+
+	caCertPath := "/etc/ssl/certs/ca-certificates.crt"
+	if _, err := os.Stat(caCertPath); err == nil {
+		caCert, err := os.ReadFile(caCertPath)
+		if err == nil {
+			caCertPool := x509.NewCertPool()
+			if caCertPool.AppendCertsFromPEM(caCert) {
+				tlsConfig.RootCAs = caCertPool
+			}
+		}
+	} else {
+		if systemCertPool, err := x509.SystemCertPool(); err == nil {
+			tlsConfig.RootCAs = systemCertPool
+		}
+	}
+
+	clientOptions.SetTLSConfig(tlsConfig)
+
+	clientOptions.SetMaxPoolSize(100)
+	clientOptions.SetMinPoolSize(10)
+	clientOptions.SetMaxConnIdleTime(30 * time.Second)
+
+	client, err := mongo.Connect(ctx, clientOptions)
 	if err != nil {
 		return nil, err
 	}
 
-	// Ping the database
-	if err := client.Ping(ctx, nil); err != nil {
+	pingCtx, pingCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer pingCancel()
+	if err := client.Ping(pingCtx, nil); err != nil {
 		return nil, err
 	}
 
