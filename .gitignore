@@ -4,9 +4,11 @@
 *.dll
 *.so
 *.dylib
-main
-api
-portfolio-api
+
+# Binary executables (root level only)
+/main
+/api
+/portfolio-api
 bin/
 .env*
 .migration
