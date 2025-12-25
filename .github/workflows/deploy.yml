@@ -8,6 +8,10 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     
     steps:
       - name: Checkout code
@@ -29,7 +33,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}/portfolio-api
+          images: ghcr.io/${{ github.repository_owner }}/portfolio-api
           tags: |
             type=ref,event=tag
             type=semver,pattern={{version}}
@@ -73,7 +77,7 @@ jobs:
             echo ""
             
             # Variables
-            IMAGE_NAME="ghcr.io/${{ github.repository }}/portfolio-api"
+            IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/portfolio-api"
             TAG="${{ github.ref_name }}"
             CONTAINER_NAME="portfolio-api"
             APP_DIR="/opt/portfolio-api"
