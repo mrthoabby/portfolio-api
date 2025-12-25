@@ -2,16 +2,26 @@ package mongo
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"log"
-	"os"
+	"fmt"
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/mrthoabby/portfolio-api/internal/common/contracts"
+	"github.com/mrthoabby/portfolio-api/internal/common/logger"
+)
+
+const (
+	// Connection timeouts
+	connectionTimeout = 10 * time.Second
+	pingTimeout       = 30 * time.Second
+	disconnectTimeout = 5 * time.Second
+
+	// Connection pool settings
+	maxPoolSize     = 100
+	minPoolSize     = 10
+	maxConnIdleTime = 30 * time.Second
 )
 
 // DataSource implements contract.DataSource for MongoDB.
@@ -23,67 +33,46 @@ type DataSource struct {
 // Ensure DataSource implements contract.DataSource.
 var _ contracts.DataSource = (*DataSource)(nil)
 
-// NewDataSource creates a new MongoDB data source connection.
-func NewDataSource(connectionString, databaseName string) (*DataSource, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+// NewDataSource creates a new MongoDB data source connection using the provided logger.
+// The logger is required and cannot be nil.
+func NewDataSource(connectionString, databaseName string, logs logger.Logger) (*DataSource, error) {
+	sanitizedURL := sanitizeMongoURLForLogging(connectionString)
+	logs.Info("Attempting to connect to MongoDB",
+		logger.String("url", sanitizedURL),
+		logger.String("database", databaseName),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), connectionTimeout)
 	defer cancel()
 
 	clientOptions := options.Client().ApplyURI(connectionString)
+	logs.Debug("Connection options configured")
 
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: false,
-	}
+	clientOptions.SetMaxPoolSize(maxPoolSize)
+	clientOptions.SetMinPoolSize(minPoolSize)
+	clientOptions.SetMaxConnIdleTime(maxConnIdleTime)
 
-	caCertPath := "/etc/ssl/certs/ca-certificates.crt"
-	certsLoaded := false
-
-	// Try to load CA certificates from file
-	if _, err := os.Stat(caCertPath); err == nil {
-		caCert, err := os.ReadFile(caCertPath)
-		if err == nil {
-			caCertPool := x509.NewCertPool()
-			if caCertPool.AppendCertsFromPEM(caCert) {
-				tlsConfig.RootCAs = caCertPool
-				certsLoaded = true
-				log.Printf("MongoDB TLS: Loaded CA certificates from %s", caCertPath)
-			} else {
-				log.Printf("MongoDB TLS: Warning - Failed to parse CA certificates from %s", caCertPath)
-			}
-		} else {
-			log.Printf("MongoDB TLS: Warning - Failed to read CA certificates from %s: %v", caCertPath, err)
-		}
-	} else {
-		log.Printf("MongoDB TLS: CA certificate file not found at %s, trying system cert pool", caCertPath)
-	}
-
-	// Fallback to system cert pool if file loading failed
-	if !certsLoaded {
-		if systemCertPool, err := x509.SystemCertPool(); err == nil {
-			tlsConfig.RootCAs = systemCertPool
-			certsLoaded = true
-			log.Printf("MongoDB TLS: Using system certificate pool")
-		} else {
-			log.Printf("MongoDB TLS: Warning - Failed to load system certificate pool: %v", err)
-			log.Printf("MongoDB TLS: Warning - TLS connection may fail without proper CA certificates")
-		}
-	}
-
-	clientOptions.SetTLSConfig(tlsConfig)
-
-	clientOptions.SetMaxPoolSize(100)
-	clientOptions.SetMinPoolSize(10)
-	clientOptions.SetMaxConnIdleTime(30 * time.Second)
-
+	logs.Debug("Attempting connection",
+		logger.String("timeout", connectionTimeout.String()),
+	)
 	client, err := mongo.Connect(ctx, clientOptions)
 	if err != nil {
-		return nil, err
+		logs.Error("Connection failed", logger.Error(err))
+		return nil, fmt.Errorf("failed to connect to MongoDB: %w", err)
 	}
 
-	pingCtx, pingCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	logs.Debug("Connection established, verifying with ping")
+	pingCtx, pingCancel := context.WithTimeout(context.Background(), pingTimeout)
 	defer pingCancel()
 	if err := client.Ping(pingCtx, nil); err != nil {
-		return nil, err
+		logs.Error("Ping failed", logger.Error(err))
+		client.Disconnect(context.Background())
+		return nil, fmt.Errorf("failed to ping MongoDB: %w", err)
 	}
+
+	logs.Info("Successfully connected and verified to database",
+		logger.String("database", databaseName),
+	)
 
 	db := client.Database(databaseName)
 
@@ -100,7 +89,7 @@ func (d *DataSource) Store(name string) contracts.Store {
 
 // Close closes the data source connection.
 func (d *DataSource) Close() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), disconnectTimeout)
 	defer cancel()
 	return d.client.Disconnect(ctx)
 }
