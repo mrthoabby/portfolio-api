@@ -27,7 +27,6 @@ func main() {
 	v := version.Get()
 	appLogger.Info("Starting Portfolio API",
 		logger.String("version", v.Version),
-		logger.String("commit", v.GitCommit),
 		logger.String("built", v.BuildDate),
 	)
 
