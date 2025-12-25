@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"time"
 
@@ -47,6 +48,13 @@ func NewDataSource(connectionString, databaseName string, logs logger.Logger) (*
 
 	clientOptions := options.Client().ApplyURI(connectionString)
 	logs.Debug("Connection options configured")
+
+	// Configure TLS explicitly for MongoDB Atlas connections
+	// This helps resolve "tls: internal error" issues in distroless containers
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: false,
+	}
+	clientOptions.SetTLSConfig(tlsConfig)
 
 	clientOptions.SetMaxPoolSize(maxPoolSize)
 	clientOptions.SetMinPoolSize(minPoolSize)
