@@ -1,6 +1,9 @@
 package scope
 
-import "strings"
+import (
+	"os"
+	"strings"
+)
 
 // Scope represents the environment scope of the application
 type Scope int
@@ -14,6 +17,15 @@ const (
 	Test
 )
 
+// currentScope holds the current application scope
+var currentScope Scope
+
+// Initialize initializes the scope from the ENV environment variable.
+// This should be called once at application startup.
+func Initialize() {
+	currentScope = ParseScope(os.Getenv("ENV"))
+}
+
 // String returns the string representation of the scope
 func (s Scope) String() string {
 	switch s {
@@ -24,21 +36,6 @@ func (s Scope) String() string {
 	default:
 		return "local"
 	}
-}
-
-// IsProduction returns true if the scope is Production
-func (s Scope) IsProduction() bool {
-	return s == Production
-}
-
-// IsTest returns true if the scope is Test
-func (s Scope) IsTest() bool {
-	return s == Test
-}
-
-// IsLocal returns true if the scope is Local
-func (s Scope) IsLocal() bool {
-	return s == Local
 }
 
 // ParseScope parses a string value and returns the corresponding Scope.
@@ -65,4 +62,24 @@ func ParseScope(envValue string) Scope {
 
 	// Default to local
 	return Local
+}
+
+// IsProduction returns true if the current scope is Production
+func IsProduction() bool {
+	return currentScope == Production
+}
+
+// IsTest returns true if the current scope is Test
+func IsTest() bool {
+	return currentScope == Test
+}
+
+// IsLocal returns true if the current scope is Local
+func IsLocal() bool {
+	return currentScope == Local
+}
+
+// String returns the string representation of the current scope
+func String() string {
+	return currentScope.String()
 }
