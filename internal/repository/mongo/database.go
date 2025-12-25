@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"log"
 	"os"
 	"time"
 
@@ -34,17 +35,36 @@ func NewDataSource(connectionString, databaseName string) (*DataSource, error) {
 	}
 
 	caCertPath := "/etc/ssl/certs/ca-certificates.crt"
+	certsLoaded := false
+
+	// Try to load CA certificates from file
 	if _, err := os.Stat(caCertPath); err == nil {
 		caCert, err := os.ReadFile(caCertPath)
 		if err == nil {
 			caCertPool := x509.NewCertPool()
 			if caCertPool.AppendCertsFromPEM(caCert) {
 				tlsConfig.RootCAs = caCertPool
+				certsLoaded = true
+				log.Printf("MongoDB TLS: Loaded CA certificates from %s", caCertPath)
+			} else {
+				log.Printf("MongoDB TLS: Warning - Failed to parse CA certificates from %s", caCertPath)
 			}
+		} else {
+			log.Printf("MongoDB TLS: Warning - Failed to read CA certificates from %s: %v", caCertPath, err)
 		}
 	} else {
+		log.Printf("MongoDB TLS: CA certificate file not found at %s, trying system cert pool", caCertPath)
+	}
+
+	// Fallback to system cert pool if file loading failed
+	if !certsLoaded {
 		if systemCertPool, err := x509.SystemCertPool(); err == nil {
 			tlsConfig.RootCAs = systemCertPool
+			certsLoaded = true
+			log.Printf("MongoDB TLS: Using system certificate pool")
+		} else {
+			log.Printf("MongoDB TLS: Warning - Failed to load system certificate pool: %v", err)
+			log.Printf("MongoDB TLS: Warning - TLS connection may fail without proper CA certificates")
 		}
 	}
 
