@@ -8,6 +8,9 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-portfolio-api
+      cancel-in-progress: true
     permissions:
       contents: read
       packages: write
