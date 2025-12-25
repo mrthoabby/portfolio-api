@@ -86,7 +86,6 @@ jobs:
             TAG="${{ github.ref_name }}"
             CONTAINER_NAME="portfolio-api"
             APP_DIR="/opt/portfolio-api"
-            HEALTH_CHECK_URL="http://localhost:1000/health"
             MAX_RETRIES=10
             RETRY_DELAY=3
             
@@ -158,13 +157,24 @@ jobs:
               exit 1
             fi
             
-            # Paso 5: Iniciar el nuevo contenedor con puerto público (interno y externo)
+            # Leer el puerto del archivo .env
+            PORT=$(grep -E "^PORT=" "${APP_DIR}/.env" | cut -d '=' -f2 | tr -d '"' | tr -d "'" | xargs)
+            if [ -z "${PORT}" ]; then
+              echo -e "${RED}✗ Error: PORT not found in .env file${NC}"
+              exit 1
+            fi
+            echo -e "${GREEN}✓ Port read from .env: ${PORT}${NC}"
+            
+            # Construir URL de health check con el puerto leído
+            HEALTH_CHECK_URL="http://localhost:${PORT}/health"
+            
+            # Paso 5: Iniciar el nuevo contenedor con puerto público
             echo -e "${YELLOW}Starting new container...${NC}"
             if ! docker run -d \
               --name ${CONTAINER_NAME} \
               --restart unless-stopped \
               --env-file ${APP_DIR}/.env \
-              -p 1000:8080 \
+              -p ${PORT}:${PORT} \
               ${IMAGE_NAME}:latest; then
               echo -e "${RED}✗ Error starting container${NC}"
               exit 1
