@@ -71,6 +71,8 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
+          timeout: 300s
+          command_timeout: 600s
           script: |
             set -e
             
@@ -94,6 +96,39 @@ jobs:
             RED='\033[0;31m'
             NC='\033[0m' # No Color
             
+            # Verificar conectividad básica
+            echo -e "${YELLOW}Verifying server connectivity...${NC}"
+            if ! ping -c 2 localhost > /dev/null 2>&1; then
+              echo -e "${RED}✗ Server connectivity check failed${NC}"
+              exit 1
+            fi
+            echo -e "${GREEN}✓ Server is reachable${NC}"
+            echo ""
+            
+            # Paso 1: Detener y eliminar el contenedor existente
+            echo -e "${YELLOW}Stopping and removing existing container...${NC}"
+            if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+              docker stop ${CONTAINER_NAME} 2>/dev/null || true
+              docker rm ${CONTAINER_NAME} 2>/dev/null || true
+              echo -e "${GREEN}✓ Container stopped and removed${NC}"
+            else
+              echo -e "${GREEN}✓ No existing container found${NC}"
+            fi
+            
+            # Paso 2: Limpiar TODAS las imágenes anteriores de portfolio-api
+            echo -e "${YELLOW}Cleaning up all previous images...${NC}"
+            OLD_IMAGES=$(docker images ${IMAGE_NAME} --format "{{.ID}}" 2>/dev/null || echo "")
+            if [ -n "${OLD_IMAGES}" ]; then
+              echo "${OLD_IMAGES}" | xargs -r docker rmi -f 2>/dev/null || true
+              echo -e "${GREEN}✓ All previous images removed${NC}"
+            else
+              echo -e "${GREEN}✓ No previous images found${NC}"
+            fi
+            
+            # Limpiar imágenes huérfanas (dangling images)
+            docker image prune -f 2>/dev/null || true
+            
+            # Paso 3: Login a GitHub Container Registry
             echo -e "${YELLOW}Logging in to GitHub Container Registry...${NC}"
             # Login usando PAT si está disponible (necesario para repositorios privados)
             if [ -n "${{ secrets.GHCR_PAT }}" ]; then
@@ -106,30 +141,14 @@ jobs:
               echo -e "${YELLOW}⚠ No GHCR_PAT secret found, assuming public repository${NC}"
             fi
             
-            echo -e "${YELLOW}Pulling image with tag: ${TAG}...${NC}"
-            # Intentar pull con el tag específico primero
+            # Paso 4: Pull de la nueva imagen
+            echo -e "${YELLOW}Pulling new image with tag: ${TAG}...${NC}"
             if docker pull ${IMAGE_NAME}:${TAG}; then
               echo -e "${GREEN}✓ Image pulled with tag ${TAG}${NC}"
               docker tag ${IMAGE_NAME}:${TAG} ${IMAGE_NAME}:latest
             else
               echo -e "${RED}✗ Error: Could not pull image with tag ${TAG}${NC}"
               exit 1
-            fi
-            
-            # Guardar la imagen anterior para rollback si es necesario
-            OLD_IMAGE_ID=""
-            if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-              OLD_IMAGE_ID=$(docker inspect ${CONTAINER_NAME} --format='{{.Image}}' 2>/dev/null || echo "")
-              echo -e "${YELLOW}Old container image ID: ${OLD_IMAGE_ID}${NC}"
-            fi
-            
-            echo -e "${YELLOW}Stopping existing container...${NC}"
-            if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-              docker stop ${CONTAINER_NAME} 2>/dev/null || true
-              docker rm ${CONTAINER_NAME} 2>/dev/null || true
-              echo -e "${GREEN}✓ Container stopped and removed${NC}"
-            else
-              echo -e "${GREEN}✓ No existing container found${NC}"
             fi
             
             # Verificar que existe el archivo .env
@@ -139,13 +158,13 @@ jobs:
               exit 1
             fi
             
-            # Iniciar el nuevo contenedor
+            # Paso 5: Iniciar el nuevo contenedor con puerto público (interno y externo)
             echo -e "${YELLOW}Starting new container...${NC}"
             if ! docker run -d \
               --name ${CONTAINER_NAME} \
               --restart unless-stopped \
               --env-file ${APP_DIR}/.env \
-              -p 127.0.0.1:1000:8080 \
+              -p 1000:8080 \
               ${IMAGE_NAME}:latest; then
               echo -e "${RED}✗ Error starting container${NC}"
               exit 1
@@ -175,18 +194,9 @@ jobs:
               echo -e "${YELLOW}Container logs:${NC}"
               docker logs --tail 50 ${CONTAINER_NAME}
               
-              # Rollback si hay una imagen anterior
-              if [ -n "${OLD_IMAGE_ID}" ]; then
-                echo -e "${YELLOW}Attempting rollback to previous image...${NC}"
-                docker stop ${CONTAINER_NAME} 2>/dev/null || true
-                docker rm ${CONTAINER_NAME} 2>/dev/null || true
-                docker run -d \
-                  --name ${CONTAINER_NAME} \
-                  --restart unless-stopped \
-                  --env-file ${APP_DIR}/.env \
-                  -p 127.0.0.1:1000:8080 \
-                  ${OLD_IMAGE_ID} || echo -e "${RED}✗ Rollback failed${NC}"
-              fi
+              # Rollback no disponible ya que limpiamos todas las imágenes anteriores
+              echo -e "${YELLOW}⚠ Rollback not available - all previous images were cleaned${NC}"
+              echo -e "${YELLOW}Please check the container logs above and fix the issue${NC}"
               
               exit 1
             fi
@@ -199,16 +209,23 @@ jobs:
             echo -e "${YELLOW}Container logs (last 20 lines):${NC}"
             docker logs --tail 20 ${CONTAINER_NAME}
             
-            # Limpiar imágenes viejas (mantener solo las últimas 3)
+            # Paso 6: Limpiar imágenes huérfanas y sin usar después del deploy
             echo ""
-            echo -e "${YELLOW}Cleaning up old images...${NC}"
-            docker image prune -f --filter "until=168h" || true
-            OLD_IMAGES=$(docker images ${IMAGE_NAME} --format "{{.ID}}" | tail -n +4)
-            if [ -n "${OLD_IMAGES}" ]; then
-              echo "${OLD_IMAGES}" | xargs -r docker rmi -f || true
-              echo -e "${GREEN}✓ Old images cleaned${NC}"
+            echo -e "${YELLOW}Final cleanup of unused images...${NC}"
+            docker image prune -f 2>/dev/null || true
+            
+            # Eliminar todas las imágenes de portfolio-api excepto la que está corriendo
+            CURRENT_IMAGE=$(docker inspect ${CONTAINER_NAME} --format='{{.Image}}' 2>/dev/null || echo "")
+            ALL_IMAGES=$(docker images ${IMAGE_NAME} --format "{{.ID}}" 2>/dev/null || echo "")
+            if [ -n "${ALL_IMAGES}" ] && [ -n "${CURRENT_IMAGE}" ]; then
+              for img_id in ${ALL_IMAGES}; do
+                if [ "${img_id}" != "${CURRENT_IMAGE}" ]; then
+                  docker rmi -f ${img_id} 2>/dev/null || true
+                fi
+              done
+              echo -e "${GREEN}✓ Unused images cleaned${NC}"
             else
-              echo -e "${GREEN}✓ No old images to clean${NC}"
+              echo -e "${GREEN}✓ No unused images to clean${NC}"
             fi
             
             echo ""
