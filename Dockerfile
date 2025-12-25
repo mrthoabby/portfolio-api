@@ -44,22 +44,23 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # =============================================================================
 # STAGE 2: Final production image
 # =============================================================================
-# This starts a NEW, fresh image (distroless) - completely separate from stage 1
-# It does NOT include anything from stage 1 automatically
-# Using 'base' instead of 'static' for better TLS support with MongoDB Atlas
-FROM gcr.io/distroless/base-debian12:nonroot
+# Using Alpine instead of distroless for better TLS support with MongoDB Atlas
+# Alpine provides proper TLS libraries that work correctly with static binaries
+FROM alpine:3.20
 
-# Copy CA certificates bundle from the "builder" stage (stage 1)
-# We need to copy the entire certs directory structure for proper TLS support
-# Using 'base' distroless image provides glibc which has better TLS support
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+# Install CA certificates for TLS connections to MongoDB Atlas
+RUN apk add --no-cache ca-certificates
+
+# Create non-root user (UID 65532, GID 65532)
+RUN addgroup -g 65532 -S nonroot && \
+    adduser -u 65532 -S nonroot -G nonroot
 
 # Copy the compiled binary from the "builder" stage (stage 1)
 # The binary was compiled in stage 1 and saved at /app/main
 # We copy it to the same location in this final image
 COPY --from=builder /app/main /app/main
 
-# Use non-root user (UID 65532, provided by distroless:nonroot)
+# Use non-root user
 USER nonroot:nonroot
 
 # =============================================================================

@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"time"
 
@@ -50,10 +51,22 @@ func NewDataSource(connectionString, databaseName string, logs logger.Logger) (*
 	logs.Debug("Connection options configured")
 
 	// Configure TLS explicitly for MongoDB Atlas connections
-	// This helps resolve "tls: internal error" issues in distroless containers
+	// Load system root CAs to ensure proper TLS verification
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: false,
 	}
+
+	// Load system root CAs explicitly to avoid TLS internal errors
+	// This is especially important for static binaries (CGO_ENABLED=0)
+	rootCAs, err := x509.SystemCertPool()
+	if err != nil || rootCAs == nil {
+		logs.Debug("Failed to load system cert pool, using empty pool", logger.Error(err))
+		rootCAs = x509.NewCertPool()
+	} else {
+		logs.Debug("System certificate pool loaded successfully")
+	}
+
+	tlsConfig.RootCAs = rootCAs
 	clientOptions.SetTLSConfig(tlsConfig)
 
 	clientOptions.SetMaxPoolSize(maxPoolSize)
