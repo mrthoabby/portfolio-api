@@ -9,3 +9,48 @@ node_modules
 .vscode
 .idea
 
+# Test files (not needed in production build)
+*_test.go
+*.test
+
+# Build artifacts
+*.tar.gz
+*.zip
+*.log
+bin/
+dist/
+
+# Documentation (already excluded with *.md but being explicit)
+docs/
+
+# CI/CD files
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# IDE and editor files
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Additional build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Coverage and profiling files
+*.out
+*.prof
+coverage.txt
+coverage.html
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# License file (not needed in container)
+LICENSE
+
